@@ -628,6 +628,9 @@ static struct input_types input_types[] = {
 { "--wacom_iv",		"-wacom_iv",	"Wacom protocol 4 tablet",
 	B9600, CS8 | CRTSCTS,
 	SERIO_WACOM_IV,		0x00,	0x00,	0,	wacom_iv_init },
+{ "--im-310",     "-im310",  "EPSON IM-310 touchscreen",
+    B9600, CS8,
+    SERIO_IM310,        0x00,   0x00,   0,  NULL },
 { NULL, NULL, NULL, 0, 0, 0, 0, 0, 0, NULL }
 };
 
