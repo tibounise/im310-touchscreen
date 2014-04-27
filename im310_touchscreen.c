@@ -140,17 +140,6 @@ static void handle_model_response(struct wacom *wacom)
 	input_set_abs_params(wacom->dev, ABS_PRESSURE, 0, max_z, 0, 0);
 }
 
-
-static void handle_configuration_response(struct wacom *wacom)
-{
-	int x, y, skip;
-
-	dev_dbg(&wacom->dev->dev, "Configuration string: %s\n", wacom->data);
-	sscanf(wacom->data, "~R%x,%u,%u,%u,%u", &skip, &skip, &skip, &x, &y);
-	input_abs_set_res(wacom->dev, ABS_X, x);
-	input_abs_set_res(wacom->dev, ABS_Y, y);
-}
-
 static void handle_coordinates_response(struct wacom *wacom)
 {
 	int x, y;
