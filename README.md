@@ -13,6 +13,8 @@ You can check out `scanfrule.c` to see how the touchscreen packets should be han
 cd /tmp
 sudo apt-get install git build-essential linux-headers-$(uname -r)
 git clone https://github.com/tibounise/im310-touchscreen
+cd im310-touchscreen
+make
 ```
 
 Now you can load the driver :
