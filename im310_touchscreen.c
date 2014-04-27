@@ -105,7 +105,7 @@ static int im310_connect(struct serio *serio, struct serio_driver *drv) {
 
 	im310->dev = input_dev;
 	im310->extra_z_bits = 1;
-	im310->tool = im310->idx = 0;
+	im310->idx = 0;
 	snprintf(im310->phys, sizeof(im310->phys), "%s/input0", serio->phys);
 
 	input_dev->name = "EPSON IM-310 POS touchscreen";
@@ -166,7 +166,7 @@ static struct serio_driver im310_drv = {
 	.driver		= {
 		.name	= "im310_touchscreen",
 	},
-	.description	= DRIVER_DESC,
+	.description	= "EPSON IM-310 POS touchscreen driver",
 	.id_table	= im310_serio_ids,
 	.interrupt	= im310_interrupt,
 	.connect	= im310_connect,
