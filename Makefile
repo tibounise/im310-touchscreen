@@ -1,4 +1,4 @@
-obj-m += wacom_serial.o
+obj-m += im310_touchscreen.o
 
 all: modules inputattach
 
