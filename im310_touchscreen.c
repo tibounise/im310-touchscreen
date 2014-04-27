@@ -90,7 +90,7 @@ static irqreturn_t im310_interrupt(struct serio *serio, unsigned char data, unsi
 
 static void im310_setup(struct im310 *im310) {
 	input_set_abs_params(im310->dev, ABS_X, 0, 1024, 0, 0);
-	input_set_abs_params(im310->dev, ABS_Y, 1024, 0, 0, 0);
+	input_set_abs_params(im310->dev, ABS_Y, 0, 1024, 0, 0);
 }
 
 static int im310_connect(struct serio *serio, struct serio_driver *drv) {
