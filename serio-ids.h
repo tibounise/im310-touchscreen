@@ -128,5 +128,8 @@
 #ifndef SERIO_WACOM_IV
 # define SERIO_WACOM_IV		0x3d
 #endif
+#ifndef SERIO_IM310
+# define SERIO_IM310        0x3e
+#endif
 
 #endif
