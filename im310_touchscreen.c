@@ -46,6 +46,7 @@ struct im310 {
 	char phys[32];
 };
 
+/* Sending touchscreen data as an event */
 static void send_touch_event(struct im310 *im310, unsigned int pos_x, unsigned int pos_y, bool is_touching) {
 	input_report_key(im310->dev, BTN_TOUCH,is_touching);
 	input_report_abs(im310->dev, ABS_X, pos_x);
@@ -53,6 +54,7 @@ static void send_touch_event(struct im310 *im310, unsigned int pos_x, unsigned i
 	input_sync(im310->dev);
 }
 
+/* Extracting data from the packet */
 static void handle_packet(struct im310 *im310) {
 	int x,y;
 	char is_touching;
@@ -67,7 +69,7 @@ static void handle_packet(struct im310 *im310) {
 	}
 }
 
-
+/* When we get data from the serial port */
 static irqreturn_t im310_interrupt(struct serio *serio, unsigned char data, unsigned int flags) {
 	struct im310 *im310 = serio_get_drvdata(serio);
 
@@ -88,6 +90,7 @@ static irqreturn_t im310_interrupt(struct serio *serio, unsigned char data, unsi
 	return IRQ_HANDLED;
 }
 
+/* Calibrate min/max values of the touchscreen */
 static void im310_setup(struct im310 *im310) {
 	input_set_abs_params(im310->dev, ABS_X, 0, 1024, 0, 0);
 	input_set_abs_params(im310->dev, ABS_Y, 0, 1024, 0, 0);
