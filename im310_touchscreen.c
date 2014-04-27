@@ -27,7 +27,7 @@
 #include <linux/interrupt.h>
 #include <linux/input.h>
 #include <linux/serio.h>
-#include "serio-ids"
+#include "serio-ids.h"
 #include <linux/slab.h>
 #include <linux/completion.h>
 
