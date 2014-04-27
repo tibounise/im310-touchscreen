@@ -20,6 +20,7 @@
 /* XXX To be removed before (widespread) release. */
 #define DEBUG
 
+#include <stdio.h>
 #include <linux/string.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -35,12 +36,12 @@ MODULE_AUTHOR("Jean THOMAS <contact@tibounise.com>");
 MODULE_DESCRIPTION("EPSON IM-310 POS touchscreen driver");
 MODULE_LICENSE("GPL");
 
-#define PACKET_LENGTH 10
+#define PACKET_LENGTH 11
 
 struct im310 {
 	struct input_dev *dev;
 	struct completion cmd_done;
-	int extra_z_bits, tool;
+	int extra_z_bits;
 	int idx;
 	unsigned char data[32];
 	char phys[32];
@@ -53,114 +54,37 @@ static void send_touch_event(struct im310 *im310, unsigned int pos_x, unsigned i
 	input_sync(im310->dev);
 }
 
-static void handle_coordinates_response(struct wacom *wacom)
-{
-	int x, y;
+static void handle_packet(struct im310 *im310) {
+	int x,y;
+	char is_touching;
 
-	dev_dbg(&wacom->dev->dev, "Coordinates string: %s\n", wacom->data);
-	sscanf(wacom->data, "~C%u,%u", &x, &y);
-	input_set_abs_params(wacom->dev, ABS_X, 0, x, 0, 0);
-	input_set_abs_params(wacom->dev, ABS_Y, 0, y, 0, 0);
-}
+	sscanf(im310->data,"%c%4d,%4d\x0A",&is_touching,&x,&y);
 
-static void handle_response(struct wacom *wacom)
-{
-	if (wacom->data[0] != '~' || wacom->idx < 2) {
-		dev_dbg(&wacom->dev->dev, "got a garbled response of length "
-			                  "%d.\n", wacom->idx);
-		wacom->idx = 0;
-		return;
+	/* Finger away from the touchscreen */
+	if (is_touching == 0x54) {
+		send_touch_event(im310,x,y,1);
+	} else if (is_touching == 0x52) {
+		send_touch_event(im310,x,y,0);
 	}
-
-	wacom->data[wacom->idx-1] = 0;
-	wacom->idx = 0;
-
-	switch (wacom->data[1]) {
-	case '#':
-		handle_model_response(wacom);
-		break;
-	case 'R':
-		handle_configuration_response(wacom);
-		break;
-	case 'C':
-		handle_coordinates_response(wacom);
-		break;
-	default:
-		dev_dbg(&wacom->dev->dev, "got an unexpected response: %s\n",
-			wacom->data);
-		break;
-	}
-
-	complete(&wacom->cmd_done);
-}
-
-static void handle_packet(struct wacom *wacom)
-{
-	int in_proximity_p, stylus_p, button, x, y, z;
-	int tool;
-
-	in_proximity_p = wacom->data[0] & 0x40;
-	stylus_p = wacom->data[0] & 0x20;
-	button = (wacom->data[3] & 0x78) >> 3;
-	x = (wacom->data[0] & 3) << 14 | wacom->data[1]<<7 | wacom->data[2];
-	y = (wacom->data[3] & 3) << 14 | wacom->data[4]<<7 | wacom->data[5];
-	z = wacom->data[6] & 0x7f;
-	if(wacom->extra_z_bits >= 1)
-		z = z << 1 | (wacom->data[3] & 0x4) >> 2;
-	if(wacom->extra_z_bits > 1)
-		z = z << 1 | (wacom->data[0] & 0x4);
-	z = z ^ (0x40 << wacom->extra_z_bits);
-
-	/* NOTE: According to old wcmSerial code, button&8 is the
-	 * eraser on Graphire tablets.  I have removed this until
-	 * someone can verify it. */
-	tool = stylus_p ? ((button & 4) ? ERASER : STYLUS) : CURSOR;
-
-	if (tool != wacom->tool && wacom->tool != 0) {
-		input_report_key(wacom->dev, tools[wacom->tool].input_id, 0);
-		input_sync(wacom->dev);
-	}
-	wacom->tool = tool;
-
-	input_report_key(wacom->dev, tools[tool].input_id, in_proximity_p);
-	input_report_key(wacom->dev, MSC_SERIAL, 1);
-	input_report_key(wacom->dev, ABS_MISC, in_proximity_p ? tools[tool].device_id : 0);
-	input_report_abs(wacom->dev, ABS_X, x);
-	input_report_abs(wacom->dev, ABS_Y, y);
-	input_report_abs(wacom->dev, ABS_PRESSURE, z);
-	input_report_key(wacom->dev, BTN_TOUCH, button & 1);
-	input_report_key(wacom->dev, BTN_STYLUS, button & 2);
-	input_sync(wacom->dev);
 }
 
 
-static irqreturn_t wacom_interrupt(struct serio *serio, unsigned char data,
-				   unsigned int flags)
-{
-	struct wacom *wacom = serio_get_drvdata(serio);
+static irqreturn_t im310_interrupt(struct serio *serio, unsigned char data, unsigned int flags) {
+	struct im310 *im310 = serio_get_drvdata(serio);
 
-	if (data & 0x80)
-		wacom->idx = 0;
-	if (wacom->idx >= sizeof(wacom->data)) {
-		dev_dbg(&wacom->dev->dev, "throwing away %d bytes of garbage\n",
-			wacom->idx);
-		wacom->idx = 0;
+	if (im310->idx >= sizeof(im310->data)) {
+		dev_dbg(&im310->dev->dev, "throwing away %d bytes of garbage\n",
+			im310->idx);
+		im310->idx = 0;
 	}
 
-	wacom->data[wacom->idx++] = data;
+	/* Filling the data buffer */
+	im310->data[im310->idx++] = data;
 
-	/* We're either expecting a carriage return-terminated ASCII
-	 * response string, or a seven-byte packet with the MSB set on
-	 * the first byte.
-	 *
-	 * Note however that some tablets (the PenPartner, for
-	 * example) don't send a carriage return at the end of a
-	 * command.  We handle these by waiting for timeout. */
-	if (wacom->idx == PACKET_LENGTH && (wacom->data[0] & 0x80)) {
-		handle_packet(wacom);
-		wacom->idx = 0;
-	} else if (data == '\r' && !(wacom->data[0] & 0x80)) {
-		handle_response(wacom);
+	/* When we have our (holy) packet */
+	if (im310->idx == PACKET_LENGTH) {
+		handle_packet(im310);
+		im310->idx = 0;
 	}
 	return IRQ_HANDLED;
 }
@@ -245,7 +169,7 @@ static struct serio_driver im310_drv = {
 	},
 	.description	= DRIVER_DESC,
 	.id_table	= im310_serio_ids,
-	.interrupt	= wacom_interrupt,
+	.interrupt	= im310_interrupt,
 	.connect	= im310_connect,
 	.disconnect	= im310_disconnect,
 };
