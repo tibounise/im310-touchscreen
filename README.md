@@ -7,9 +7,19 @@ There is a file named "touchdump", it is a dump of the touchscreen, where I pres
 
 You can check out `scanfrule.c` to see how the touchscreen packets should be handled, using `sscanf()`.
 
-## Howto : installation
+## Howto
 
+```
+cd /tmp
+sudo apt-get install git build-essential linux-headers-$(uname -r)
+git clone https://github.com/tibounise/im310-touchscreen
+```
 
+Now you can load the driver :
+```
+sudo insmod im310_touchscreen.ko
+./inputattach -im310 /dev/ttyS3
+```
 
 Don't worry if the X or Y axis is inverted.
 
