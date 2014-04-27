@@ -1,22 +1,7 @@
 /*
- * Wacom protocol 4 serial tablet driver
+ * EPSON IM-310 POS touchscreen driver
  *
- * Many thanks to Bill Seremetis, without whom PenPartner support
- * would not have been possible.
- *
- * Thanks to Patrick Mahoney.
- *
- * Sections I have been unable to test personally due to lack of
- * available hardware are marked UNTESTED.  Much of what is marked
- * UNTESTED comes from reading the wcmSerial code in linuxwacom 0.9.0.
- * If you have a tablet that corresponds to an UNTESTED section,
- * please email me your results.
- *
- * To do:
- *  - support pad buttons;
- *  - support (protocol 4-style) tilt;
- *  - support suppress;
- *  - support Graphire relative wheel.
+ * This is experimental software, be carefull when using it !
  *
  * This driver was developed with reference to much code written by others,
  * particularly:
@@ -28,7 +13,8 @@
  *    Frederic Lepied, France. <Lepied@XFree86.org> and
  *    Ping Cheng, Wacom. <pingc@wacom.com>;
  *  - and xf86wacom.c (a presumably ancient version of the linuxwacom code), by
- *    Frederic Lepied and Raph Levien <raph@gtk.org>.
+ *    Frederic Lepied and Raph Levien <raph@gtk.org>;
+ *  - wacom-serial-iv driver by Julian Squires <julian@cipht.net>.
  */
 
 /* XXX To be removed before (widespread) release. */
@@ -41,16 +27,12 @@
 #include <linux/interrupt.h>
 #include <linux/input.h>
 #include <linux/serio.h>
+#include "serio-ids"
 #include <linux/slab.h>
 #include <linux/completion.h>
 
-/* XXX To be removed before (widespread) release. */
-#ifndef SERIO_WACOM_IV
-#define SERIO_WACOM_IV 0x3d
-#endif
-
-#define DRIVER_AUTHOR	"Julian Squires <julian@cipht.net>"
-#define DEVICE_NAME	"Wacom protocol 4 serial tablet"
+#define DRIVER_AUTHOR	"Jean THOMAS <contact@tibounise.com>"
+#define DEVICE_NAME	"EPSON IM-310 POS touchscreen"
 #define DRIVER_DESC	DEVICE_NAME " driver"
 
 MODULE_AUTHOR(DRIVER_AUTHOR);
@@ -461,11 +443,11 @@ static int wacom_connect(struct serio *serio, struct serio_driver *drv)
 	return err;
 }
 
-static struct serio_device_id wacom_serio_ids[] = {
+static struct serio_device_id im310_serio_ids[] = {
 	{
 		.type	= SERIO_RS232,
-		.proto	= SERIO_WACOM_IV,
-		.id	= SERIO_ANY,
+		.proto	= SERIO_IM310,
+		.id	    = SERIO_ANY,
 		.extra	= SERIO_ANY,
 	},
 	{ 0 }
@@ -475,10 +457,10 @@ MODULE_DEVICE_TABLE(serio, wacom_serio_ids);
 
 static struct serio_driver wacom_drv = {
 	.driver		= {
-		.name	= "wacom_serial",
+		.name	= "im310_touchscreen",
 	},
 	.description	= DRIVER_DESC,
-	.id_table	= wacom_serio_ids,
+	.id_table	= im310_serio_ids,
 	.interrupt	= wacom_interrupt,
 	.connect	= wacom_connect,
 	.disconnect	= wacom_disconnect,
