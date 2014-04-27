@@ -20,7 +20,6 @@
 /* XXX To be removed before (widespread) release. */
 #define DEBUG
 
-#include <stdio.h>
 #include <linux/string.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
