@@ -31,29 +31,13 @@
 #include <linux/slab.h>
 #include <linux/completion.h>
 
-#define DRIVER_AUTHOR	"Jean THOMAS <contact@tibounise.com>"
-#define DEVICE_NAME	"EPSON IM-310 POS touchscreen"
-#define DRIVER_DESC	DEVICE_NAME " driver"
-
-MODULE_AUTHOR(DRIVER_AUTHOR);
-MODULE_DESCRIPTION(DRIVER_DESC);
+MODULE_AUTHOR("Jean THOMAS <contact@tibounise.com>");
+MODULE_DESCRIPTION("EPSON IM-310 POS touchscreen driver");
 MODULE_LICENSE("GPL");
 
 #define PACKET_LENGTH 10
 
-#define PAD_SERIAL 0xF0
-
-/* enum { STYLUS = 1, ERASER, PAD, CURSOR, TOUCH };
-struct { int device_id; int input_id; } tools[] = { 
-	{ 0,0 },
-	{ STYLUS_DEVICE_ID, BTN_TOOL_PEN },
-	{ ERASER_DEVICE_ID, BTN_TOOL_RUBBER },
-	{ PAD_DEVICE_ID, 0 },
-	{ CURSOR_DEVICE_ID, BTN_TOOL_MOUSE },
-	{ TOUCH_DEVICE_ID, BTN_TOOL_FINGER }
-}; */
-
-struct wacom {
+struct im310 {
 	struct input_dev *dev;
 	struct completion cmd_done;
 	int extra_z_bits, tool;
@@ -62,82 +46,11 @@ struct wacom {
 	char phys[32];
 };
 
-/* enum {
-	MODEL_CINTIQ		= 0x504C,
-	MODEL_CINTIQ2		= 0x4454,
-	MODEL_DIGITIZER_II	= 0x5544,
-	MODEL_GRAPHIRE		= 0x4554,
-	MODEL_INTUOS		= 0x4744,
-	MODEL_INTUOS2		= 0x5844,
-	MODEL_PENPARTNER	= 0x4354,
-	MODEL_UNKNOWN		= 0
-}; */
-
-static void handle_model_response(struct wacom *wacom)
-{
-	int major_v, minor_v, max_z;
-	char *p;
-
-	major_v = minor_v = 0;
-	p = strrchr(wacom->data, 'V');
-	if (p)
-		sscanf(p+1, "%u.%u", &major_v, &minor_v);
-
-	switch (wacom->data[2] << 8 | wacom->data[3]) {
-	case MODEL_INTUOS:	/* UNTESTED */
-	case MODEL_INTUOS2:
-		dev_info(&wacom->dev->dev, "Intuos tablets are not supported by"
-			 " this driver.\n");
-		p = "Intuos";
-		wacom->dev->id.version = MODEL_INTUOS;
-		break;
-	case MODEL_CINTIQ:	/* UNTESTED */
-	case MODEL_CINTIQ2:
-		p = "Cintiq";
-		wacom->dev->id.version = MODEL_CINTIQ;
-		switch (wacom->data[5]<<8 | wacom->data[6]) {
-		case 0x3731: /* PL-710 */
-			/* wcmSerial sets res to 2540x2540 in this case. */
-			/* fall through */
-		case 0x3535: /* PL-550 */
-		case 0x3830: /* PL-800 */
-			wacom->extra_z_bits = 2;
-		}
-		break;
-	case MODEL_PENPARTNER:
-		p = "Penpartner";
-		wacom->dev->id.version = MODEL_PENPARTNER;
-		/* wcmSerial sets res 1000x1000 in this case. */
-		break;
-	case MODEL_GRAPHIRE:
-		p = "Graphire";
-		wacom->dev->id.version = MODEL_GRAPHIRE;
-		/* Apparently Graphire models do not answer coordinate
-		   requests; see also wacom_setup(). */
-		input_set_abs_params(wacom->dev, ABS_X, 0, 5103, 0, 0);
-		input_set_abs_params(wacom->dev, ABS_Y, 0, 3711, 0, 0);
-		input_abs_set_res(wacom->dev, ABS_X, 1016);
-		input_abs_set_res(wacom->dev, ABS_Y, 1016);
-		wacom->extra_z_bits = 2;
-		break;
-	case MODEL_DIGITIZER_II:
-		p = "Digitizer II";
-		wacom->dev->id.version = MODEL_DIGITIZER_II;
-		if (major_v == 1 && minor_v <= 2)
-			wacom->extra_z_bits = 0; /* UNTESTED */
-		break;
-	default:		/* UNTESTED */
-		dev_dbg(&wacom->dev->dev, "Didn't understand Wacom model "
-			                  "string: %s\n", wacom->data);
-		p = "Unknown Protocol IV";
-		wacom->dev->id.version = MODEL_UNKNOWN;
-		break;
-	}
-	max_z = (1<<(7+wacom->extra_z_bits))-1;
-	dev_info(&wacom->dev->dev, "Wacom tablet: %s, version %u.%u\n", p,
-		 major_v, minor_v);
-	dev_dbg(&wacom->dev->dev, "Max pressure: %d.\n", max_z);
-	input_set_abs_params(wacom->dev, ABS_PRESSURE, 0, max_z, 0, 0);
+static void send_touch_event(struct im310 *im310, unsigned int pos_x, unsigned int pos_y, bool is_touching) {
+	input_report_key(im310->dev, BTN_TOUCH,is_touching);
+	input_report_abs(im310->dev, ABS_X, pos_x);
+	input_report_abs(im310->dev, ABS_Y, pos_y);
+	input_sync(im310->dev);
 }
 
 static void handle_coordinates_response(struct wacom *wacom)
@@ -252,146 +165,47 @@ static irqreturn_t wacom_interrupt(struct serio *serio, unsigned char data,
 	return IRQ_HANDLED;
 }
 
-static void wacom_disconnect(struct serio *serio)
-{
-	struct wacom *wacom = serio_get_drvdata(serio);
-
-	serio_close(serio);
-	serio_set_drvdata(serio, NULL);
-	input_unregister_device(wacom->dev);
-	kfree(wacom);
+static void im310_setup(struct im310 *im310) {
+	input_set_abs_params(im310->dev, ABS_X, 0, 1024, 0, 0);
+	input_set_abs_params(im310->dev, ABS_Y, 0, 1024, 0, 0);
 }
 
-static int wacom_send(struct serio *serio, const char *command)
-{
-	int err = 0;
-	for (; !err && *command; command++)
-		err = serio_write(serio, *command);
-	return err;
-}
-
-static int send_setup_string(struct wacom *wacom, struct serio *serio)
-{
-	const char *s;
-	switch (wacom->dev->id.version) {
-	case MODEL_CINTIQ:	/* UNTESTED */
-		s = COMMAND_ORIGIN_IN_UPPER_LEFT
-			COMMAND_TRANSMIT_AT_MAX_RATE
-			COMMAND_ENABLE_CONTINUOUS_MODE
-			COMMAND_START_SENDING_PACKETS;
-		break;
-	case MODEL_PENPARTNER:
-		s = COMMAND_ENABLE_PRESSURE_MODE
-			COMMAND_START_SENDING_PACKETS;
-		break;
-	default:
-		s = COMMAND_MULTI_MODE_INPUT
-			COMMAND_ORIGIN_IN_UPPER_LEFT
-			COMMAND_ENABLE_ALL_MACRO_BUTTONS
-			COMMAND_DISABLE_GROUP_1_MACRO_BUTTONS
-			COMMAND_TRANSMIT_AT_MAX_RATE
-			COMMAND_DISABLE_INCREMENTAL_MODE
-			COMMAND_ENABLE_CONTINUOUS_MODE
-			COMMAND_Z_FILTER
-			COMMAND_START_SENDING_PACKETS;
-		break;
-	}
-	return wacom_send(serio, s);
-}
-
-static int wacom_setup(struct wacom *wacom, struct serio *serio)
-{
-	int err;
-	unsigned long u;
-
-	/* Note that setting the link speed is the job of inputattach.
-	 * We assume that reset negotiation has already happened,
-	 * here. */
-	init_completion(&wacom->cmd_done);
-	err = wacom_send(serio, REQUEST_MODEL_AND_ROM_VERSION);
-	if (err)
-		return err;
-	u = wait_for_completion_timeout(&wacom->cmd_done, HZ);
-	if (u == 0) {
-		if(wacom->idx == 0) {
-			dev_info(&wacom->dev->dev, "Timed out waiting for tablet to "
-				 "respond with model and version.\n");
-			return -EIO;
-		}
-		handle_response(wacom);
-	}
-
-	init_completion(&wacom->cmd_done);
-	err = wacom_send(serio, REQUEST_CONFIGURATION_STRING);
-	if (err)
-		return err;
-	u = wait_for_completion_timeout(&wacom->cmd_done, HZ);
-	if (u == 0) {
-		if(wacom->idx == 0)
-			dev_info(&wacom->dev->dev, "Timed out waiting for tablet to "
-				 "respond with configuration string.  Continuing anyway.\n");
-		else
-			handle_response(wacom);
-	}
-
-	init_completion(&wacom->cmd_done);
-	err = wacom_send(serio, REQUEST_MAX_COORDINATES);
-	if (err)
-		return err;
-	u = wait_for_completion_timeout(&wacom->cmd_done, HZ);
-	if (u == 0) {
-		if(wacom->idx == 0)
-			dev_info(&wacom->dev->dev, "Timed out waiting for tablet to "
-				 "respond with coordinates string.  Continuing anyway.\n");
-		else
-			handle_response(wacom);
-	}
-
-	return send_setup_string(wacom, serio);
-}
-
-static int wacom_connect(struct serio *serio, struct serio_driver *drv)
-{
-	struct wacom *wacom;
+static int im310_connect(struct serio *serio, struct serio_driver *drv) {
+	struct im310 *im310;
 	struct input_dev *input_dev;
 	int err = -ENOMEM;
 
-	wacom = kzalloc(sizeof(struct wacom), GFP_KERNEL);
+	im310 = kzalloc(sizeof(struct im310), GFP_KERNEL);
 	input_dev = input_allocate_device();
-	if (!wacom || !input_dev)
+	if (!im310 || !input_dev)
 		goto fail0;
 
-	wacom->dev = input_dev;
-	wacom->extra_z_bits = 1;
-	wacom->tool = wacom->idx = 0;
-	snprintf(wacom->phys, sizeof(wacom->phys), "%s/input0", serio->phys);
+	im310->dev = input_dev;
+	im310->extra_z_bits = 1;
+	im310->tool = im310->idx = 0;
+	snprintf(im310->phys, sizeof(im310->phys), "%s/input0", serio->phys);
 
-	input_dev->name = DEVICE_NAME;
-	input_dev->phys = wacom->phys;
+	input_dev->name = "EPSON IM-310 POS touchscreen";
+	input_dev->phys = im310->phys;
 	input_dev->id.bustype = BUS_RS232;
-	input_dev->id.vendor  = SERIO_WACOM_IV;
+	input_dev->id.vendor  = SERIO_IM310;
 	input_dev->id.product = serio->id.extra;
 	input_dev->id.version = 0x0100;
 	input_dev->dev.parent = &serio->dev;
 
 	input_dev->evbit[0] = BIT_MASK(EV_KEY) | BIT_MASK(EV_ABS);
-	__set_bit(BTN_TOOL_PEN, input_dev->keybit);
-	__set_bit(BTN_TOOL_RUBBER, input_dev->keybit);
-	__set_bit(BTN_TOOL_MOUSE, input_dev->keybit);
-	__set_bit(BTN_TOUCH, input_dev->keybit);
-	__set_bit(BTN_STYLUS, input_dev->keybit);
+	//__set_bit(BTN_TOUCH, input_dev->keybit);
+	input_dev->keybit[BIT_WORD(BTN_TOUCH)] = BIT_MASK(BTN_TOUCH); /* is it the same as above ? */
 
-	serio_set_drvdata(serio, wacom);
+	serio_set_drvdata(serio, im310);
 
 	err = serio_open(serio, drv);
 	if (err)
 		goto fail1;
 
-	err = wacom_setup(wacom, serio);
-	if (err)
-		goto fail2;
+	im310_setup(im310);
 
-	err = input_register_device(wacom->dev);
+	err = input_register_device(im310->dev);
 	if (err)
 		goto fail2;
 
@@ -400,8 +214,17 @@ static int wacom_connect(struct serio *serio, struct serio_driver *drv)
  fail2:	serio_close(serio);
  fail1:	serio_set_drvdata(serio, NULL);
  fail0:	input_free_device(input_dev);
-	kfree(wacom);
+	kfree(im310);
 	return err;
+}
+
+static void im310_disconnect(struct serio *serio) {
+	struct im310 *im310 = serio_get_drvdata(serio);
+
+	serio_close(serio);
+	serio_set_drvdata(serio, NULL);
+	input_unregister_device(im310->dev);
+	kfree(im310);
 }
 
 static struct serio_device_id im310_serio_ids[] = {
@@ -423,17 +246,15 @@ static struct serio_driver im310_drv = {
 	.description	= DRIVER_DESC,
 	.id_table	= im310_serio_ids,
 	.interrupt	= wacom_interrupt,
-	.connect	= wacom_connect,
-	.disconnect	= wacom_disconnect,
+	.connect	= im310_connect,
+	.disconnect	= im310_disconnect,
 };
 
-static int __init im310_init(void)
-{
-	return serio_register_driver(&310_drv);
+static int __init im310_init(void) {
+	return serio_register_driver(&im310_drv);
 }
 
-static void __exit im310_exit(void)
-{
+static void __exit im310_exit(void) {
 	serio_unregister_driver(&im310_drv);
 }
 
