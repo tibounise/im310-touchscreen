@@ -39,38 +39,11 @@ MODULE_AUTHOR(DRIVER_AUTHOR);
 MODULE_DESCRIPTION(DRIVER_DESC);
 MODULE_LICENSE("GPL");
 
-#define REQUEST_MODEL_AND_ROM_VERSION	"~#"
-#define REQUEST_MAX_COORDINATES		"~C\r"
-#define REQUEST_CONFIGURATION_STRING	"~R\r"
-#define REQUEST_RESET_TO_PROTOCOL_IV	"\r#"
-/* Note: sending "\r$\r" causes at least the Digitizer II to send
- * packets in ASCII instead of binary.  "\r#" seems to undo that. */
-
-#define COMMAND_START_SENDING_PACKETS		"ST\r"
-#define COMMAND_STOP_SENDING_PACKETS		"SP\r"
-#define COMMAND_MULTI_MODE_INPUT		"MU1\r"
-#define COMMAND_ORIGIN_IN_UPPER_LEFT		"OC1\r"
-#define COMMAND_ENABLE_ALL_MACRO_BUTTONS	"~M0\r"
-#define COMMAND_DISABLE_GROUP_1_MACRO_BUTTONS	"~M1\r"
-#define COMMAND_TRANSMIT_AT_MAX_RATE		"IT0\r"
-#define COMMAND_DISABLE_INCREMENTAL_MODE	"IN0\r"
-#define COMMAND_ENABLE_CONTINUOUS_MODE		"SR\r"
-#define COMMAND_ENABLE_PRESSURE_MODE		"PH1\r"
-#define COMMAND_Z_FILTER			"ZF1\r"
-
-/* Note that this is a protocol 4 packet without tilt information. */
-#define PACKET_LENGTH 7
-
-/* device IDs from wacom_wac.h */
-#define STYLUS_DEVICE_ID	0x02
-#define TOUCH_DEVICE_ID         0x03
-#define CURSOR_DEVICE_ID        0x06
-#define ERASER_DEVICE_ID        0x0A
-#define PAD_DEVICE_ID           0x0F
+#define PACKET_LENGTH 10
 
 #define PAD_SERIAL 0xF0
 
-enum { STYLUS = 1, ERASER, PAD, CURSOR, TOUCH };
+/* enum { STYLUS = 1, ERASER, PAD, CURSOR, TOUCH };
 struct { int device_id; int input_id; } tools[] = { 
 	{ 0,0 },
 	{ STYLUS_DEVICE_ID, BTN_TOOL_PEN },
@@ -78,7 +51,7 @@ struct { int device_id; int input_id; } tools[] = {
 	{ PAD_DEVICE_ID, 0 },
 	{ CURSOR_DEVICE_ID, BTN_TOOL_MOUSE },
 	{ TOUCH_DEVICE_ID, BTN_TOOL_FINGER }
-};
+}; */
 
 struct wacom {
 	struct input_dev *dev;
@@ -89,17 +62,16 @@ struct wacom {
 	char phys[32];
 };
 
-
-enum {
-	MODEL_CINTIQ		= 0x504C, /* PL */
-	MODEL_CINTIQ2		= 0x4454, /* DT */
-	MODEL_DIGITIZER_II	= 0x5544, /* UD */
-	MODEL_GRAPHIRE		= 0x4554, /* ET */
-	MODEL_INTUOS		= 0x4744, /* GD */
-	MODEL_INTUOS2		= 0x5844, /* XD */
-	MODEL_PENPARTNER	= 0x4354, /* CT */
+/* enum {
+	MODEL_CINTIQ		= 0x504C,
+	MODEL_CINTIQ2		= 0x4454,
+	MODEL_DIGITIZER_II	= 0x5544,
+	MODEL_GRAPHIRE		= 0x4554,
+	MODEL_INTUOS		= 0x4744,
+	MODEL_INTUOS2		= 0x5844,
+	MODEL_PENPARTNER	= 0x4354,
 	MODEL_UNKNOWN		= 0
-};
+}; */
 
 static void handle_model_response(struct wacom *wacom)
 {
@@ -453,9 +425,9 @@ static struct serio_device_id im310_serio_ids[] = {
 	{ 0 }
 };
 
-MODULE_DEVICE_TABLE(serio, wacom_serio_ids);
+MODULE_DEVICE_TABLE(serio, im310_serio_ids);
 
-static struct serio_driver wacom_drv = {
+static struct serio_driver im310_drv = {
 	.driver		= {
 		.name	= "im310_touchscreen",
 	},
@@ -466,15 +438,15 @@ static struct serio_driver wacom_drv = {
 	.disconnect	= wacom_disconnect,
 };
 
-static int __init wacom_init(void)
+static int __init im310_init(void)
 {
-	return serio_register_driver(&wacom_drv);
+	return serio_register_driver(&310_drv);
 }
 
-static void __exit wacom_exit(void)
+static void __exit im310_exit(void)
 {
-	serio_unregister_driver(&wacom_drv);
+	serio_unregister_driver(&im310_drv);
 }
 
-module_init(wacom_init);
-module_exit(wacom_exit);
+module_init(im310_init);
+module_exit(im310_exit);
